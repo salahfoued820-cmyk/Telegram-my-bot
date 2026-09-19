@@ -1,1 +1,1 @@
-telegram-video-bot
+Telegram-my-bot
