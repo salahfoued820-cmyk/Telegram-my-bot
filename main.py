@@ -9,7 +9,7 @@ Recommended env vars:
   TELEGRAM_SECRET_TOKEN  Random string used to verify Telegram webhook requests
 """
 
-from_future_import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
