@@ -316,7 +316,7 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("Failed to set webhook")
     else:
-    logger.warning("WEBHOOK_BASE_URL not set - webhook not registered")
+            logger.warning("WEBHOOK_BASE_URL not set - webhook not registered")
 
     try:
         yield
