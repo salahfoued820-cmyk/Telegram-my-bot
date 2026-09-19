@@ -78,7 +78,8 @@ class TelegramMessage(BaseModel):
     text: Optional[str] = None
     date: int
     model_config = {"populate_by_name": True}
-    class TelegramUpdate(BaseModel):
+
+class TelegramUpdate(BaseModel):
     update_id: int
     message: Optional[TelegramMessage] = None
 
