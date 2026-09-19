@@ -1,14 +1,15 @@
+"""
 Production-ready Telegram bot: user sends text -> bot returns an MP4 video.
 
 Required env vars:
-  TELEGRAM_API_TOKEN     Bot token from @BotFather
-  WEBHOOK_BASE_URL       Public HTTPS base URL of this app (e.g. https://mybot.onrender.com)
+  TELEGRAM_API_TOKEN     Bot token from BotFather
+  WEBHOOK_BASE_URL       Public HTTPS base URL of this app
 
 Recommended env vars:
   TELEGRAM_SECRET_TOKEN  Random string used to verify Telegram webhook requests
 """
 
-from __future__ import annotations
+from_future_import annotations
 
 import asyncio
 import logging
@@ -56,7 +57,7 @@ _generation_semaphore = asyncio.Semaphore(MAX_CONCURRENT_GENERATIONS)
 _FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
 
 # ============================================================
-# Pydantic models (Telegram update shape)
+# Pydantic models
 # ============================================================
 class TelegramChat(BaseModel):
     id: int
@@ -77,8 +78,7 @@ class TelegramMessage(BaseModel):
     text: Optional[str] = None
     date: int
     model_config = {"populate_by_name": True}
-
-class TelegramUpdate(BaseModel):
+    class TelegramUpdate(BaseModel):
     update_id: int
     message: Optional[TelegramMessage] = None
 
@@ -92,7 +92,6 @@ async def _tg_request(
     data: Optional[dict] = None,
     files: Optional[dict] = None,
 ) -> dict:
-    """POST to Telegram Bot API with retries on transient failures."""
     assert _http_client is not None, "HTTP client not initialized"
 
     url = f"{TELEGRAM_API_URL}/{method}"
@@ -115,7 +114,7 @@ async def _tg_request(
             body = response.json()
             if not body.get("ok"):
                 raise RuntimeError(f"Telegram API error: {body}")
-             return body
+            return body
         except (httpx.HTTPError, RuntimeError) as exc:
             last_error = exc
             wait = 2 ** attempt
@@ -142,7 +141,6 @@ async def send_chat_action(chat_id: int, action: str = "upload_video") -> None:
             json_payload={"chat_id": chat_id, "action": action},
         )
     except Exception:
-        # Non-critical: ignore failures
         logger.debug("sendChatAction failed (ignored)", exc_info=True)
 
 async def send_video(chat_id: int, video_path: str, caption: Optional[str] = None) -> None:
@@ -154,10 +152,9 @@ async def send_video(chat_id: int, video_path: str, caption: Optional[str] = Non
         await _tg_request("sendVideo", data=payload, files=files)
 
 # ============================================================
-# Video generation (real MP4 via ffmpeg)
+# Video generation
 # ============================================================
 def _escape_ffmpeg_text(text: str) -> str:
-    """Escape special characters for ffmpeg drawtext filter."""
     return (
         text.replace("\\", "\\\\")
             .replace(":", "\\:")
@@ -167,37 +164,25 @@ def _escape_ffmpeg_text(text: str) -> str:
     )
 
 def generate_mp4_video(prompt: str) -> str:
-    """
-    Generate a real MP4 file from the prompt using ffmpeg.
-    Runs in a worker thread (called via asyncio.to_thread).
-
-    Replace this function with your real AI video generator
-    (e.g. Stable Video Diffusion, Runway API, etc.) — keep the same
-    signature: input str -> output file path (str).
-    """
     workdir = Path(tempfile.gettempdir()) / f"tg_video_{uuid.uuid4().hex}"
     workdir.mkdir(parents=True, exist_ok=True)
 
     output_path = workdir / "output.mp4"
 
-    # Wrap long prompts across lines (~40 chars)
     wrapped_lines = []
     for line in prompt.splitlines() or [prompt]:
         while len(line) > 40:
             wrapped_lines.append(line[:40])
             line = line[40:]
         wrapped_lines.append(line)
-    display_text = "\n".join(wrapped_lines[:8])  # max 8 lines
+    display_text = "\n".join(wrapped_lines[:8])
     safe_text = _escape_ffmpeg_text(display_text)
 
-    # 5-second 720x1280 vertical video with animated gradient + text
     font_candidates = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "C:/Windows/Fonts/arial.ttf",
     ]
-    font_path = next((f for f in font_candidates if shutil.which("ls") and Path(f).exists()), None)
+    font_path = next((f for f in font_candidates if Path(f).exists()), None)
 
     drawtext = (
         f"drawtext=text='{safe_text}':"
@@ -209,7 +194,6 @@ def generate_mp4_video(prompt: str) -> str:
     if font_path:
         drawtext += f":fontfile='{font_path}'"
 
-    # Animated gradient background (rotating hue) using gradients + hue filter
     vf = (
         "format=yuv420p,"
         "hue=H=2*PI*t/5:s=1.2,"
@@ -225,7 +209,7 @@ def generate_mp4_video(prompt: str) -> str:
         "-i", "gradients=s=720x1280:c0=0x1e3a8a:c1=0x9333ea:c2=0xec4899:"
               "x0=0:y0=0:x1=720:y1=1280:d=5:speed=0.05",
         "-t", "5",
-   "-vf", vf,
+        "-vf", vf,
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-crf", "23",
@@ -246,7 +230,6 @@ def generate_mp4_video(prompt: str) -> str:
                 f"ffmpeg failed (rc={result.returncode}): {result.stderr.strip()}"
             )
     except Exception:
-        # Cleanup on failure
         shutil.rmtree(workdir, ignore_errors=True)
         raise
 
@@ -259,20 +242,20 @@ async def process_message(chat_id: int, text: str) -> None:
     video_path: Optional[str] = None
     try:
         async with _generation_semaphore:
-            # Send "typing/uploading" action while we work
             heartbeat = asyncio.create_task(_heartbeat(chat_id))
-
             try:
                 video_path = await asyncio.to_thread(generate_mp4_video, text)
             finally:
                 heartbeat.cancel()
-                with contextlib_suppress():
+                try:
                     await heartbeat
+                except asyncio.CancelledError:
+                    pass
 
             await send_video(
                 chat_id,
                 video_path,
-                caption=f"🎬 {text[:200]}",
+                caption=f"Video for: {text[:200]}",
             )
             logger.info("Video sent to chat %s", chat_id)
 
@@ -281,7 +264,7 @@ async def process_message(chat_id: int, text: str) -> None:
         try:
             await send_message(
                 chat_id,
-                "⚠️ Sorry, something went wrong while generating the video. Please try again.",
+                "Sorry, something went wrong while generating the video. Please try again.",
             )
         except Exception:
             logger.exception("Failed to notify user about the error")
@@ -290,7 +273,6 @@ async def process_message(chat_id: int, text: str) -> None:
             _cleanup_video(video_path)
 
 async def _heartbeat(chat_id: int) -> None:
-    """Keep the 'uploading video' indicator alive while generation runs."""
     try:
         while True:
             await send_chat_action(chat_id, "upload_video")
@@ -303,23 +285,14 @@ def _cleanup_video(video_path: str) -> None:
         p = Path(video_path)
         if p.exists():
             p.unlink()
-        # Remove parent workdir if it's our temp dir
         parent = p.parent
         if parent.name.startswith("tg_video_"):
             shutil.rmtree(parent, ignore_errors=True)
     except Exception:
         logger.warning("Failed to cleanup %s", video_path, exc_info=True)
 
-class contextlib_suppress:
-    """Tiny local helper to avoid importing contextlib.suppress twice."""
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return exc_type is not None
-
 # ============================================================
-# FastAPI lifespan: HTTP client + setWebhook
+# FastAPI lifespan
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -342,11 +315,11 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("Failed to set webhook")
     else:
-        logger.warning("WEBHOOK_BASE_URL not set — webhook not registered")
+    logger.warning("WEBHOOK_BASE_URL not set - webhook not registered")
 
     try:
         yield
-  finally:
+    finally:
         if _http_client is not None:
             await _http_client.aclose()
         _http_client = None
@@ -371,7 +344,6 @@ async def telegram_webhook(
     background_tasks: BackgroundTasks,
     request: Request,
 ) -> dict:
-    # Verify secret token (if configured)
     if TELEGRAM_SECRET_TOKEN:
         header_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if header_token != TELEGRAM_SECRET_TOKEN:
@@ -395,7 +367,7 @@ async def telegram_webhook(
         background_tasks.add_task(
             send_message,
             chat_id,
-            "👋 Send me any text prompt and I'll generate a short video for you.",
+            "Send me any text prompt and I'll generate a short video for you.",
         )
         return {"ok": True}
 
@@ -403,20 +375,13 @@ async def telegram_webhook(
         background_tasks.add_task(
             send_message,
             chat_id,
-            f"⚠️ Prompt too long ({len(text)} chars). Max is {MAX_PROMPT_LENGTH}.",
+            f"Prompt too long ({len(text)} chars). Max is {MAX_PROMPT_LENGTH}.",
         )
         return {"ok": True}
 
-    # Acknowledge and process asynchronously
     background_tasks.add_task(
-        send_message, chat_id, f"🎥 Generating video for: “{text[:120]}”"
+        send_message, chat_id, f"Generating video for: {text[:120]}"
     )
     background_tasks.add_task(process_message, chat_id, text)
 
     return {"ok": True}
-```
-
-## 3) Procfile (لـ Render / Heroku)
-
-```
-web: uvicorn main:app --host 0.0.0.0 --port $PORT              
