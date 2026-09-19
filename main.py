@@ -54,7 +54,7 @@ logger = logging.getLogger("telegram-bot")
 
 _http_client: Optional[httpx.AsyncClient] = None
 _generation_semaphore = asyncio.Semaphore(MAX_CONCURRENT_GENERATIONS)
-_FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
+_FFMPEG_EXE = shutil.which("ffmpeg") or imageio_ffmpeg.get_ffmpeg_exe()
 
 # ============================================================
 # Pydantic models
