@@ -18,8 +18,8 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
 
 # الروابط الرسمية للخدمات السحابية
-TELEGRAM_API_URL = f"https://telegram.org{TELEGRAM_TOKEN}/"
-REPLICATE_API_URL = "https://replicate.com"
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/"
+REPLICATE_API_URL = "https://api.replicate/v1/predictions"
 
 # اسم موديل توليد الفيديو المعتمد على منصة Replicate
 MODEL_VERSION = "luma/ray"
