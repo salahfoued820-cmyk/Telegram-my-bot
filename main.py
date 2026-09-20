@@ -9,6 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+from a2wsgi import WSGImiddleware
+# تحويل تطبيق Flask ليتوافق مع سيرفر uvicorn الخاص بـ Render
+asgi_app = WSGImiddleware(app)
 
 # 2. استدعاء متغيرات البيئة الحساسة من خادم التستضيف (Render)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
