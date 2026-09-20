@@ -11,8 +11,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 from a2wsgi import WSGIMiddleware
 # تحويل تطبيق Flask ليتوافق مع سيرفر uvicorn الخاص بـ Render
-asgi_app = WSGImiddleware(app)
-
+asgi_app = WSGIMiddleware(app)
 # 2. استدعاء متغيرات البيئة الحساسة من خادم التستضيف (Render)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
