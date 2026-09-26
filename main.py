@@ -11,7 +11,9 @@ import gradio as gr
 from diffusers import AnimateDiffPipeline, DDIMScheduler, MotionAdapter
 from diffusers.utils import export_to_video
 from moviepy.editor import VideoFileClip, concatenate_videoclips
-
+# 🪐 الإعدادات المعمارية الفائقة (Sovereign Environment Engine)
+# -------------------------------------------------------------
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 # التحقق من وجود مفتاح OpenRouter في البيئة، وإلا يطلب من المستخدم إدخاله من الواجهة
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
